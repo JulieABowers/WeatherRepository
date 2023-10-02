@@ -2,47 +2,46 @@ var apiKey = "e01f4a7a625fdc5f6318311acbe20b62";
 var locLatitude;
 var locLongitude;
 var requestURL;
-var iconEle = document.querySelector("weather-icon");
+var iconURL = "http://openweathermap.org/img/w/";
 
-function init() {
-    //getCurrentLocation();
-    setTime()
+function init() 
+{
+    //set the current date
+    populateField(".current-date", dayjs().format("dddd, MMMM D, YYYY"))
+    //get the users current location
     navigator.geolocation.getCurrentPosition(success);
     
 }
 
-function setTime()
-{
-    var timerInterval = setInterval($(".current-date").text(dayjs().format("dddd, MMMM D, YYYY")), 60000);
-}
-
 //Pass local latitude and longitude to api to get the current weather.
-function success(pos) {
+function success(pos) 
+{
   const crd = pos.coords;
   getCurrentWeather(crd.latitude, crd.longitude)
 }
 
-function getCurrentWeather(lat, lon) {
-
+function getCurrentWeather(lat, lon) 
+{
+    //URL for current weather based on latitude, longitude, and api key
     requestURL = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=imperial&appid=${apiKey}`
-    console.log(requestURL);
-     fetch(requestURL)
-        .then(function (response) {
+    fetch(requestURL)
+        .then(function (response) 
+        {
             return response.json();
         })
-        .then(function (weatherData) {
-            //locLatitude = data[0].lat;
-            //locLongitude = data[0].lon;
+        .then(function (weatherData) 
+        {
+            //populate the fields for the current city
             populateField(".city", weatherData.name);
             populateField(".temperature", "Temp: " + Math.round(weatherData.main.temp) + "\xB0F");
             populateField(".humidity", "Humidity: " + weatherData.main.humidity + "%");
             populateField(".wind", "Wind: " + weatherData.wind.speed + " MPH");
-            console.log(weatherData.weather.icon);//iStock.com/Mongpro
-            document.getElementById("weather-icon").src = "http://openweathermap.org/img/w/" + weatherData.weather.icon + ".png";
-            });
+            document.getElementById("weather-icon").src = iconURL + weatherData.weather[0].icon + ".png";
+        });
             
 };
 
+//common function to set the value of html fields so the call to set the fields is easier to read and there aren't a million "$" everywhere
 function populateField(field, value) {
      $(field).text(value);
 
