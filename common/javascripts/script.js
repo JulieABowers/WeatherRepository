@@ -49,7 +49,7 @@ function showError(error)
     }
 
     populateField(cityClassName, errMessage);
-    populateField(tempClassName, "Temp: ");
+    populateField(tempClassName, "");
     populateField(humidityClassName, "Humidity: ");
     populateField(windClassName, "Wind: ");
     weatherIcon.src = "";
@@ -83,46 +83,35 @@ function populateField(field, value) {
 
 function getLatitudeAndLongitude(city) 
 {
+    event.preventDefault();
     //URL for api cannot have spaces so replace any spaces in the city name with underscores
-    //var inputCity = $("#city").val().replace(" ", "_");
     var inputCity = city.replace(" ", "_");
-    //saveToLocalStorage($("#city").val());
-
-    //if (inputCity == "")
-    //{
-    //    alert("Enter a valid city");
-    //}
-    //else
-    //{
-        var requestLatLongURL = `http://api.openweathermap.org/geo/1.0/direct?q=${inputCity}&appid=${apiKey}`
     
-        fetch(requestLatLongURL)
-            .then(function (response) 
-            {
-                return response.json();
-            })
-            .then(function (data) 
-            {
-                locLatitude = data[0].lat;
-                locLongitude = data[0].lon;
-                getForecast(locLatitude, locLongitude)
-            });
-    //}
+    var requestLatLongURL = `http://api.openweathermap.org/geo/1.0/direct?q=${inputCity}&appid=${apiKey}`
+    
+    fetch(requestLatLongURL)
+        .then(function (response) 
+        {
+            return response.json();
+        })
+        .then(function (data) 
+        {
+            locLatitude = data[0].lat;
+            locLongitude = data[0].lon;
+            getForecast(locLatitude, locLongitude)
+        });
 }
 
 function getForecast(lat, lon) 
 {
-
     var requestURL = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}`;
-
+    
     fetch(requestURL)
         .then(function (response) {
             return response.json();
         })
         .then(function (weatherData) 
         {
-            //if there is time do a case for more than one record being returned.
-            //Loop over the data to generate a table, each table row will have a link to the repo url
             var currentDate = dayjs().format("MM/DD/YYYY");
             var currentDay = parseInt(dayjs().format("D"));
             var recDate;
@@ -138,21 +127,26 @@ function getForecast(lat, lon)
                
                 if (recDate == currentDate) 
                 {
+                    //if the data is for the current day, populate the current info section
                     populateField(cityClassName, weatherData.city.name);
-                    populateField(tempClassName, Math.round(weatherData.list[i].main.temp) + "\xB0F");
+                    populateField(tempClassName, Math.round(convertKelvinToFahrenheit(weatherData.list[i].main.temp)) + "\xB0F");
                     populateField(humidityClassName, "Humidity: " + weatherData.list[i].main.humidity + "%");
                     populateField(windClassName, "Wind: " + weatherData.list[i].wind.speed + " MPH");
                     weatherIcon.src = iconURL + weatherData.list[i].weather[0].icon + ".png";
                 }
-                if (recDate > currentDate)
+                else if (recDate > currentDate)
                 {
+                    //if the data is after the current date, populate the forecast info section
+                    //each day returns multiple values, i.e. 9am, 12pm, 3pm so we're just going to display the values at noon
                     if (recDateUnFormat.format("hh:mm:ss") == "12:00:00")
                     {
+                        //j is the counter used to figure out the html ids
+                        //we only display 5 so get only 5 records
                         j = recDay - currentDay;
                         if (j <= 5)
                         {
                             populateField(".day-" + j + "-date", recDate);
-                            populateField(".day-" + j + "-temperature", Math.round(weatherData.list[i].main.temp) + "\xB0F");
+                            populateField(".day-" + j + "-temperature", Math.round(convertKelvinToFahrenheit(weatherData.list[i].main.temp)) + "\xB0F");
                             populateField(".day-" + j + "-humidity", "Humidity: " + weatherData.list[i].main.humidity + "%");
                             populateField(".day-" + j + "-wind", "Wind: " + weatherData.list[i].wind.speed + " MPH");
                             iconEle = "day-" + j + "-icon";
@@ -164,6 +158,11 @@ function getForecast(lat, lon)
             }
             $(cityClassName).text(weatherData.city.name);
         });
+}
+
+function convertKelvinToFahrenheit(valNum) 
+{
+    return ((valNum - 273.15) * 1.8) + 32;
 }
 
 // Function to get data store in local storage 
@@ -188,23 +187,24 @@ function checkLocalStorage()
 // Function to Set data in Local storage
 function saveToLocalStorage(city) 
 {
+    event.preventDefault();
     var data = localStorage.getItem('Search_Cities');
     if (data) 
     {
-        console.log(data)
-
+        //If there is data in local storage check if the just searched for city is already
+        //included in that data. If not, add the city to the list.
+        if (data.indexOf(city) === -1) 
+        {
+            data = data + ',' + city;
+            localStorage.setItem('Search_Cities', data);
+            createRecentSearchLink(city);
+        }
     } 
     else 
     {
+        //If there is no data in local storage, add it.
         data = city;
         localStorage.setItem('Search_Cities', data);
-    }
-
-    if (data.indexOf(city) === -1) 
-    {
-        data = data + ',' + city;
-        localStorage.setItem('Search_Cities', data);
-        createRecentSearchBtn(city);
     }
 }
 
@@ -212,8 +212,7 @@ function createRecentSearchLink(city)
 {
     var newLi = $("<li>")
     var newP = $('<p>');
-    //Adding Extra ID for Button to stop Creating Duplicate Button on Click
-    newP.attr('id', 'extraBtn');
+    newP.attr('id', 'pastCity');
     newP.attr("onmouseover", "this.style.textDecoration='underline'")
     newP.attr("onmouseout", "this.style.textDecoration='none'")
     newP.attr("style", "cursor: pointer")
@@ -221,15 +220,15 @@ function createRecentSearchLink(city)
     newP.text(city);
     newLi.append(newP)
     $("#historyList").prepend(newLi);
-    //setting click function to prevent duplicate button
-    $("#extraBtn").on("click", function () {
+    $("#pastCity").on("click", function () {
         var newCity = $(this).text();
         getLatitudeAndLongitude(newCity);
     });
 }
 
-$(document).on("click", "#searchbtn", function (event) {
-    
+//Kick off the search
+$(document).on("click", "#searchbtn", function (event) 
+{
     var searchedCity = $("#city").val();
     if (searchedCity == "")
     {
@@ -239,13 +238,15 @@ $(document).on("click", "#searchbtn", function (event) {
     {
         saveToLocalStorage(searchedCity);
         getLatitudeAndLongitude(searchedCity);
-        checkLocalStorage() 
+        //checkLocalStorage() 
     }
+    $("#city").val("");
     event.preventDefault();
 });
 
 //added clear histor fuction to clear searched city list
-$("#clear-history").on("click", function (event) {
+$("#clear-history").on("click", function (event) 
+{
     $("#historyList").empty();
     localStorage.setItem('Search_Cities', "");
 });
