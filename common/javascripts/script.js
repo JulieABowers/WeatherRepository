@@ -3,21 +3,56 @@ var locLatitude;
 var locLongitude;
 var requestURL;
 var iconURL = "http://openweathermap.org/img/w/";
+var weatherIcon = document.getElementById("weather-icon");
+var cityClassName = ".city";
+var tempClassName = ".temperature";
+var humidityClassName = ".humidity";
+var windClassName = ".wind";
+var now = moment();
+populateField("#currentDay", now.format("dddd, MMMM Do, YYYY"));
 
 function init() 
 {
-    //set the current date
-    populateField(".current-date", dayjs().format("dddd, MMMM D, YYYY"))
     //get the users current location
-    navigator.geolocation.getCurrentPosition(success);
-    
+    navigator.geolocation.getCurrentPosition(success, showError);
+    checkLocalStorage();
 }
 
-//Pass local latitude and longitude to api to get the current weather.
+//Run if the call for the current location is successful.
 function success(pos) 
 {
   const crd = pos.coords;
-  getCurrentWeather(crd.latitude, crd.longitude)
+  //Pass local latitude and longitude to api to get the current weather.
+  getCurrentWeather(crd.latitude, crd.longitude);
+  getForecast(crd.latitude, crd.longitude) ;
+}
+
+//Run if the call for the current location is unsuccessful.
+function showError(error) 
+{
+    var errMessage = "";
+
+    switch(error.code) 
+    {
+        case error.PERMISSION_DENIED:
+            errMessage = "User denied the request for local location.";
+            break;
+        case error.POSITION_UNAVAILABLE:
+            errMessage = "Location information is unavailable.";
+            break;
+        case error.TIMEOUT:
+            errMessage = "The request to get user location timed out.";
+            break;
+        default:
+            errMessage = "An unknown error occurred.";
+            break;
+    }
+
+    populateField(cityClassName, errMessage);
+    populateField(tempClassName, "Temp: ");
+    populateField(humidityClassName, "Humidity: ");
+    populateField(windClassName, "Wind: ");
+    weatherIcon.src = "";
 }
 
 function getCurrentWeather(lat, lon) 
@@ -32,14 +67,13 @@ function getCurrentWeather(lat, lon)
         .then(function (weatherData) 
         {
             //populate the fields for the current city
-            populateField(".city", weatherData.name);
-            populateField(".temperature", "Temp: " + Math.round(weatherData.main.temp) + "\xB0F");
-            populateField(".humidity", "Humidity: " + weatherData.main.humidity + "%");
-            populateField(".wind", "Wind: " + weatherData.wind.speed + " MPH");
-            document.getElementById("weather-icon").src = iconURL + weatherData.weather[0].icon + ".png";
+            populateField(cityClassName, weatherData.name);
+            populateField(tempClassName, Math.round(weatherData.main.temp) + "\xB0F");
+            populateField(humidityClassName, "Humidity: " + weatherData.main.humidity + "%");
+            populateField(windClassName, "Wind: " + weatherData.wind.speed + " MPH");
+            weatherIcon.src = iconURL + weatherData.weather[0].icon + ".png";
         });
-            
-};
+}
 
 //common function to set the value of html fields so the call to set the fields is easier to read and there aren't a million "$" everywhere
 function populateField(field, value) {
@@ -47,89 +81,173 @@ function populateField(field, value) {
 
 }
 
-function getLatitudeAndLongitude() {
-    var inputCity = $("#city").val().replace(" ", "_");
-    var requestLatLongURL = `http://api.openweathermap.org/geo/1.0/direct?q=${inputCity}&appid=${apiKey}`
-    
-    fetch(requestLatLongURL)
-        .then(function (response) {
-            return response.json();
-        })
-        .then(function (data) {
-            locLatitude = data[0].lat;
-            locLongitude = data[0].lon;
-          //  console.log(locLatitude + ', ' + locLongitude);
-            //if there is time do a case for more than one record being returned.
-            //Loop over the data to generate a table, each table row will have a link to the repo url
-            // for (var i = 0; i < data.length; i++) {
-            
-            //     link.textContent = data[i].html_url;
-            //     link.href = data[i].html_url;
+function getLatitudeAndLongitude(city) 
+{
+    //URL for api cannot have spaces so replace any spaces in the city name with underscores
+    //var inputCity = $("#city").val().replace(" ", "_");
+    var inputCity = city.replace(" ", "_");
+    //saveToLocalStorage($("#city").val());
 
-            // }
-            var requestURL = `https://api.openweathermap.org/data/2.5/forecast?lat=${locLatitude}&lon=${locLongitude}&appid=${apiKey}`;
-        console.log(requestURL);
+    //if (inputCity == "")
+    //{
+    //    alert("Enter a valid city");
+    //}
+    //else
+    //{
+        var requestLatLongURL = `http://api.openweathermap.org/geo/1.0/direct?q=${inputCity}&appid=${apiKey}`
+    
+        fetch(requestLatLongURL)
+            .then(function (response) 
+            {
+                return response.json();
+            })
+            .then(function (data) 
+            {
+                locLatitude = data[0].lat;
+                locLongitude = data[0].lon;
+                getForecast(locLatitude, locLongitude)
+            });
+    //}
+}
+
+function getForecast(lat, lon) 
+{
+
+    var requestURL = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}`;
+
     fetch(requestURL)
         .then(function (response) {
             return response.json();
         })
-        .then(function (weatherData) {
-            console.log(weatherData.city.name);
+        .then(function (weatherData) 
+        {
             //if there is time do a case for more than one record being returned.
             //Loop over the data to generate a table, each table row will have a link to the repo url
             var currentDate = dayjs().format("MM/DD/YYYY");
-            var currentHour = parseInt(dayjs().format("H"));
+            var currentDay = parseInt(dayjs().format("D"));
             var recDate;
             var recHour;
-            for (var i = 0; i < weatherData.list.length; i++) {
-                recDate = dayjs(weatherData.list[i].dt_txt).format("MM/DD/YYYY");
-                recHour = parseInt(dayjs(weatherData.list[i].dt_txt).format("H"));
-                console.log(recDate + " " + currentDate);
-                
-                if (currentDate == recDate)
+            var j = 0;
+            var iconEle;
+            
+            for (var i = 0; i < weatherData.list.length; i++) 
+            {
+                recDateUnFormat = dayjs(weatherData.list[i].dt_txt);
+                recDate = recDateUnFormat.format("MM/DD/YYYY");
+                recDay = parseInt(dayjs(weatherData.list[i].dt_txt).format("D"));
+               
+                if (recDate == currentDate) 
                 {
-                    if (currentHour > recHour)
+                    populateField(cityClassName, weatherData.city.name);
+                    populateField(tempClassName, Math.round(weatherData.list[i].main.temp) + "\xB0F");
+                    populateField(humidityClassName, "Humidity: " + weatherData.list[i].main.humidity + "%");
+                    populateField(windClassName, "Wind: " + weatherData.list[i].wind.speed + " MPH");
+                    weatherIcon.src = iconURL + weatherData.list[i].weather[0].icon + ".png";
+                }
+                if (recDate > currentDate)
+                {
+                    if (recDateUnFormat.format("hh:mm:ss") == "12:00:00")
                     {
-                        console.log("yep");
+                        j = recDay - currentDay;
+                        if (j <= 5)
+                        {
+                            populateField(".day-" + j + "-date", recDate);
+                            populateField(".day-" + j + "-temperature", Math.round(weatherData.list[i].main.temp) + "\xB0F");
+                            populateField(".day-" + j + "-humidity", "Humidity: " + weatherData.list[i].main.humidity + "%");
+                            populateField(".day-" + j + "-wind", "Wind: " + weatherData.list[i].wind.speed + " MPH");
+                            iconEle = "day-" + j + "-icon";
+                            weatherIcon = document.getElementById(iconEle);
+                            weatherIcon.src = iconURL + weatherData.list[i].weather[0].icon + ".png";
+                        }
                     }
                 }
-
-                //link.textContent = data[i].html_url;
-                //link.href = data[i].html_url;
-
             }
-            $(".city").text(weatherData.city.name);
-            //document.querySelector(".weather-icon").setAttribute("src", 'http://openweathermap.org/img/w/' + weatherData.weather[0].icon + '.png')
-            //var image = $('<img class="imgsize">').attr('src', 'http://openweathermap.org/img/w/' + response.weather[0].icon + '.png');   
-        });
-        });
-
-        
-}
-
-function getWeather() {
-
-    var requestURL = `https://api.openweathermap.org/data/2.5/forecast?lat=${locLatitude}&lon=${locLongitude}&appid=${apiKey}`;
-
-    fetch(requestURL)
-        .then(function (response) {
-            return response.json();
-        })
-        .then(function (data) {
-            console.log(data[0].cod);
-            //if there is time do a case for more than one record being returned.
-            //Loop over the data to generate a table, each table row will have a link to the repo url
-            // for (var i = 0; i < data.length; i++) {
-            
-            //     link.textContent = data[i].html_url;
-            //     link.href = data[i].html_url;
-
-            // }
+            $(cityClassName).text(weatherData.city.name);
         });
 }
+
+// Function to get data store in local storage 
+function checkLocalStorage() 
+{
+    //get the data from local storage
+    var storedData = localStorage.getItem('Search_Cities');
+    var dataArray = [];
+    if (storedData) 
+    {
+        //if there is data in local storage, trim the data then parse it into an array
+        storedData.trim();
+        dataArray = storedData.split(',');
+
+        //for each city in the array create a search link
+        for (var i = 0; i < dataArray.length; i++) {
+            createRecentSearchLink(dataArray[i]);
+        }
+    }
+}
+
+// Function to Set data in Local storage
+function saveToLocalStorage(city) 
+{
+    var data = localStorage.getItem('Search_Cities');
+    if (data) 
+    {
+        console.log(data)
+
+    } 
+    else 
+    {
+        data = city;
+        localStorage.setItem('Search_Cities', data);
+    }
+
+    if (data.indexOf(city) === -1) 
+    {
+        data = data + ',' + city;
+        localStorage.setItem('Search_Cities', data);
+        createRecentSearchBtn(city);
+    }
+}
+
+function createRecentSearchLink(city) 
+{
+    var newLi = $("<li>")
+    var newP = $('<p>');
+    //Adding Extra ID for Button to stop Creating Duplicate Button on Click
+    newP.attr('id', 'extraBtn');
+    newP.attr("onmouseover", "this.style.textDecoration='underline'")
+    newP.attr("onmouseout", "this.style.textDecoration='none'")
+    newP.attr("style", "cursor: pointer")
+    newP.addClass("searched-cities");
+    newP.text(city);
+    newLi.append(newP)
+    $("#historyList").prepend(newLi);
+    //setting click function to prevent duplicate button
+    $("#extraBtn").on("click", function () {
+        var newCity = $(this).text();
+        getLatitudeAndLongitude(newCity);
+    });
+}
+
 $(document).on("click", "#searchbtn", function (event) {
-    getLatitudeAndLongitude();
+    
+    var searchedCity = $("#city").val();
+    if (searchedCity == "")
+    {
+        alert("Enter a valid city");
+    }
+    else
+    {
+        saveToLocalStorage(searchedCity);
+        getLatitudeAndLongitude(searchedCity);
+        checkLocalStorage() 
+    }
     event.preventDefault();
+});
+
+//added clear histor fuction to clear searched city list
+$("#clear-history").on("click", function (event) {
+    $("#historyList").empty();
+    localStorage.setItem('Search_Cities', "");
 });
 
 init();
